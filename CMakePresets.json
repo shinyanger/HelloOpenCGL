@@ -1,0 +1,61 @@
+{
+    "version": 2,
+    "configurePresets": [
+        {
+            "name": "Base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "type": "STRING",
+                    "value": "${sourceDir}/../vcpkg/scripts/buildsystems/vcpkg.cmake"
+                }
+            }
+        },
+        {
+            "name": "Debug",
+            "inherits": "Base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": {
+                    "type": "STRING",
+                    "value": "Debug"
+                },
+                "CMAKE_EXPORT_COMPILE_COMMANDS": {
+                    "type": "BOOL",
+                    "value": "TRUE"
+                }
+            }
+        },
+        {
+            "name": "Release",
+            "inherits": "Base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": {
+                    "type": "STRING",
+                    "value": "Release"
+                }
+            }
+        },
+        {
+            "name": "MinSizeRel",
+            "inherits": "Base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": {
+                    "type": "STRING",
+                    "value": "MinSizeRel"
+                }
+            }
+        },
+        {
+            "name": "RelWithDebInfo",
+            "inherits": "Base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": {
+                    "type": "STRING",
+                    "value": "RelWithDebInfo"
+                }
+            }
+        }
+    ]
+}
