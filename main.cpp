@@ -94,29 +94,30 @@ GLFWwindow* InitGL()
     return window;
 }
 
-std::vector<float> PrepareData()
+std::vector<float> PrepareVertices()
 {
-    std::vector<float> points{
+    std::vector<float> vertices{
         0.0f, 0.8f, 0.0f,
+        0.8f, 0.8f, 0.0f,
         0.8f, -0.8f, 0.0f,
         -0.8f, -0.8f, 0.0f};
 
-    return points;
+    return vertices;
 }
 
-std::optional<GLuint> RenderToGLBuffer(const std::vector<float>& points)
+std::optional<GLuint> RenderToGLBuffer(const std::vector<float>& vertices)
 {
     GLuint vbo = 0;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(float), points.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
 
     GLuint vao = 0;
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
     glEnableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glVertexAttribPointer(0, points.size() / 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
 
     GLuint vs = glCreateShader(GL_VERTEX_SHADER);
     const GLchar* vertex_shader = VERTEX_SHADER;
@@ -153,7 +154,7 @@ std::optional<GLuint> RenderToGLBuffer(const std::vector<float>& points)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(program);
     glBindVertexArray(vao);
-    glDrawArrays(GL_TRIANGLES, 0, points.size() / 3);
+    glDrawArrays(GL_LINE_LOOP, 0, vertices.size() / 3);
 
     glFinish();
 
@@ -177,7 +178,8 @@ void OutputPixels(const std::vector<cl_uchar>& pixels)
 
     for (int i = 0; i < pixels_size; i++)
     {
-        std::cout << std::setw(3) << +pixels[i];
+        auto str = pixels[i] > 0 ? "11" : "00";
+        std::cout << str;
 
         if ((i + 1) % RENDER_WIDTH == 0)
         {
@@ -264,9 +266,9 @@ int main(void)
         return 1;
     }
 
-    auto points = PrepareData();
+    auto vertices = PrepareVertices();
 
-    auto optRbo = RenderToGLBuffer(points);
+    auto optRbo = RenderToGLBuffer(vertices);
     if (!optRbo)
     {
         CleanupGL(window);
