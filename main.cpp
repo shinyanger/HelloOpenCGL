@@ -1,3 +1,4 @@
+#include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -7,7 +8,6 @@
 #ifdef _WIN64
 #define GLFW_EXPOSE_NATIVE_WIN32
 #define GLFW_EXPOSE_NATIVE_WGL
-#define GLFW_INCLUDE_NONE
 #endif
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
@@ -15,11 +15,13 @@
 #include <CL/cl.h>
 #include <CL/cl_gl.h>
 
-constexpr auto RENDER_WIDTH = 32;
-constexpr auto RENDER_HEIGHT = 20;
-constexpr auto LOCAL_ITEM_SIZE = 4;
-static_assert(RENDER_WIDTH % LOCAL_ITEM_SIZE == 0, "Alignment error");
-static_assert(RENDER_HEIGHT % LOCAL_ITEM_SIZE == 0, "Alignment error");
+// #define RENDER_TO_SCREEN
+
+constexpr auto GRID_SIZE = 32;
+constexpr auto ROW_NUM = 60;
+constexpr auto COL_NUM = 30;
+constexpr auto RENDER_WIDTH = GRID_SIZE * ROW_NUM;
+constexpr auto RENDER_HEIGHT = GRID_SIZE * COL_NUM;
 
 constexpr char VERTEX_SHADER[] =
 "#version 400\n"
@@ -32,8 +34,16 @@ constexpr char FRAGMENT_SHADER[] =
 "#version 400\n"
 "out vec4 frag_color;"
 "void main() {"
-"  frag_color = vec4(0.6, 0.6, 0.6, 1.0);"
+"  frag_color = vec4(1.0, 0.0, 0.0, 1.0);"
 "}";
+
+using vertices_t = std::vector<GLfloat>;
+using shape_t = std::vector<vertices_t>;
+
+static void ValidateConstants()
+{
+    static_assert(GRID_SIZE % 4 == 0, "Alignment error");
+}
 
 void ErrorCallback(int error, const char* description)
 {
@@ -76,9 +86,11 @@ GLFWwindow* InitGL()
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+#ifndef RENDER_TO_SCREEN
     glfwWindowHint(GLFW_VISIBLE, FALSE);
+#endif
 
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Hello OpenCGL", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(1920, 1080, "Hello OpenCGL", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -94,31 +106,105 @@ GLFWwindow* InitGL()
     return window;
 }
 
-std::vector<float> PrepareVertices()
+std::vector<shape_t> PrepareShapes()
 {
-    std::vector<float> vertices{
-        0.0f, 0.8f, 0.0f,
-        0.8f, 0.8f, 0.0f,
-        0.8f, -0.8f, 0.0f,
-        -0.8f, -0.8f, 0.0f};
+    std::vector<shape_t> shapes;
 
-    return vertices;
+    shape_t shape1{
+        {
+            -0.8f, 0.8f, 0.0f,
+            0.8f, 0.8f, 0.0f,
+            0.8f, -0.8f, 0.0f,
+            -0.8f, -0.8f, 0.0f
+        },
+        {
+            -0.4f, 0.4f, 0.0f,
+            0.4f, 0.4f, 0.0f,
+            0.4f, -0.4f, 0.0f,
+            -0.4f, -0.4f, 0.0f
+        }
+    };
+    shapes.emplace_back(shape1);
+
+    shape_t shape2{
+        {
+            -0.8f, 0.8f, 0.0f,
+            -0.4f, 0.8f, 0.0f,
+            -0.4f, 0.0f, 0.0f,
+            0.4f, 0.0f, 0.0f,
+            0.4f, 0.8f, 0.0f,
+            0.8f, 0.8f, 0.0f,
+            0.8f, -0.8f, 0.0f,
+            -0.8f, -0.8f, 0.0f
+        }
+    };
+    shapes.emplace_back(shape2);
+
+    shape_t shape3{
+        {
+            -0.8f, 0.0f, 0.0f,
+            -0.4f, 0.0f, 0.0f,
+            -0.4f, 0.8f, 0.0f,
+            0.4f, 0.8f, 0.0f,
+            0.4f, 0.0f, 0.0f,
+            0.8f, 0.0f, 0.0f,
+            0.8f, -0.8f, 0.0f,
+            -0.8f, -0.8f, 0.0f
+        }
+    };
+    shapes.emplace_back(shape3);
+
+    return shapes;
 }
 
-std::optional<GLuint> RenderToGLBuffer(const std::vector<float>& vertices)
+std::vector<std::vector<GLuint>> GetGLVertexArray(const std::vector<shape_t>& shapes)
 {
-    GLuint vbo = 0;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+    assert(shapes.size() <= ROW_NUM * COL_NUM);
 
-    GLuint vao = 0;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-    glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    std::vector<std::vector<GLuint>> vboss(shapes.size());
+    std::vector<std::vector<GLuint>> vaoss(shapes.size());
+    for (size_t i = 0; i < shapes.size(); i++)
+    {
+        auto row = i / COL_NUM;
+        auto col = i % COL_NUM;
 
+        auto& shape = shapes[i];
+        std::vector<GLuint> vbos(shape.size());
+        std::vector<GLuint> vaos(shape.size());
+        glGenBuffers(vbos.size(), vbos.data());
+        glGenVertexArrays(vaos.size(), vaos.data());
+
+        for (size_t j = 0; j < shape.size(); j++)
+        {
+            vertices_t vertices = shape[j];
+            for (size_t k = 0; k < vertices.size(); k += 3)
+            {
+                auto& x = vertices[k];
+                auto& y = vertices[k + 1];
+                auto localX = (x + 1) / 2 * GRID_SIZE;
+                auto localY = (y + 1) / 2 * GRID_SIZE;
+                auto absX = localX + col * GRID_SIZE;
+                auto absY = localY + row * GRID_SIZE;
+                x = absX * 2 / RENDER_WIDTH - 1;
+                y = absY * 2 / RENDER_HEIGHT - 1;
+            }
+
+            glBindVertexArray(vaos[j]);
+            glBindBuffer(GL_ARRAY_BUFFER, vbos[j]);
+            glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(GLfloat), vertices.data(), GL_STATIC_DRAW);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+            glEnableVertexAttribArray(0);
+        }
+
+        vboss[i] = std::move(vbos);
+        vaoss[i] = std::move(vaos);
+    }
+
+    return vaoss;
+}
+
+GLuint GetGLProgram()
+{
     GLuint vs = glCreateShader(GL_VERTEX_SHADER);
     const GLchar* vertex_shader = VERTEX_SHADER;
     glShaderSource(vs, 1, &vertex_shader, NULL);
@@ -133,6 +219,31 @@ std::optional<GLuint> RenderToGLBuffer(const std::vector<float>& vertices)
     glAttachShader(program, vs);
     glLinkProgram(program);
 
+    return program;
+}
+
+void GLDrawArrays(GLuint program, const std::vector<std::vector<GLuint>>& vaoss, const std::vector<shape_t>& shapes)
+{
+    glViewport(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glUseProgram(program);
+
+    for (size_t i = 0; i < vaoss.size(); i++)
+    {
+        auto& vaos = vaoss[i];
+        auto& shape = shapes[i];
+        for (size_t j = 0; j < vaos.size(); j++)
+        {
+            glBindVertexArray(vaos[j]);
+            glDrawArrays(GL_LINE_LOOP, 0, shape[j].size() / 3);
+        }
+    }
+
+    glFinish();
+}
+
+std::optional<GLuint> RenderToGLBuffer(GLuint program, const std::vector<std::vector<GLuint>>& vaoss, const std::vector<shape_t>& shapes)
+{
     GLuint fbo;
     glGenFramebuffers(1, &fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -150,13 +261,7 @@ std::optional<GLuint> RenderToGLBuffer(const std::vector<float>& vertices)
         return {};
     }
 
-    glViewport(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glUseProgram(program);
-    glBindVertexArray(vao);
-    glDrawArrays(GL_LINE_LOOP, 0, vertices.size() / 3);
-
-    glFinish();
+    GLDrawArrays(program, vaoss, shapes);
 
     return rbo;
 }
@@ -172,23 +277,43 @@ std::string ReadCLKernel(const std::string& path)
     return result;
 }
 
-void OutputPixels(const std::vector<cl_uchar>& pixels)
+std::vector<cl_uchar> GetNthPixels(const std::vector<cl_uchar>& pixels, size_t index)
 {
-    constexpr auto pixels_size = RENDER_WIDTH * RENDER_HEIGHT;
+    std::vector<cl_uchar> gridPixels(GRID_SIZE * GRID_SIZE);
 
-    for (int i = 0; i < pixels_size; i++)
+    auto row = index / COL_NUM;
+    auto col = index % COL_NUM;
+    for (size_t i = 0; i < GRID_SIZE; i++)
     {
-        auto str = pixels[i] > 0 ? "11" : "00";
-        std::cout << str;
+        auto startIt = std::next(pixels.begin(), (row * GRID_SIZE + i) * RENDER_WIDTH + col * GRID_SIZE);
+        auto endIt = std::next(startIt, GRID_SIZE);
+        auto dstIt = std::next(gridPixels.begin(), i * GRID_SIZE);
+        std::copy(startIt, endIt, dstIt);
+    }
 
-        if ((i + 1) % RENDER_WIDTH == 0)
+    return gridPixels;
+}
+
+void OutputPixels(const std::vector<cl_uchar>& pixels, size_t count)
+{
+    for (size_t i = 0; i < count; i++)
+    {
+        auto gridPixels = GetNthPixels(pixels, i);
+        for (size_t j = 0; j < gridPixels.size(); j++)
         {
-            std::cout << std::endl;
+            auto str = gridPixels[j] > 0 ? "11" : "00";
+            std::cout << str;
+
+            if ((j + 1) % GRID_SIZE == 0)
+            {
+                std::cout << std::endl;
+            }
         }
+        std::cout << std::endl;
     }
 }
 
-void RunCLWithGLBuffer(GLFWwindow* window, GLuint rbo)
+void RunCLWithGLBuffer(GLFWwindow* window, GLuint rbo, size_t count)
 {
     cl_platform_id platform_id = NULL;
     cl_device_id device_id = NULL;
@@ -229,7 +354,7 @@ void RunCLWithGLBuffer(GLFWwindow* window, GLuint rbo)
     ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*)&mem_obj_pixels);
 
     size_t global_item_size[] = {RENDER_WIDTH, RENDER_HEIGHT};
-    size_t local_item_size[] = {LOCAL_ITEM_SIZE, LOCAL_ITEM_SIZE};
+    size_t local_item_size[] = {GRID_SIZE, GRID_SIZE};
     ret = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_item_size, local_item_size, 0, NULL, NULL);
 
     ret = clEnqueueReleaseGLObjects(command_queue, 1, &mem_obj, 0, NULL, NULL);
@@ -248,7 +373,7 @@ void RunCLWithGLBuffer(GLFWwindow* window, GLuint rbo)
     ret = clReleaseCommandQueue(command_queue);
     ret = clReleaseContext(context);
 
-    OutputPixels(pixels);
+    OutputPixels(pixels, count);
 }
 
 void CleanupGL(GLFWwindow* window)
@@ -266,16 +391,29 @@ int main(void)
         return 1;
     }
 
-    auto vertices = PrepareVertices();
+    auto shapes = PrepareShapes();
 
-    auto optRbo = RenderToGLBuffer(vertices);
+    auto vaoss = GetGLVertexArray(shapes);
+
+    auto program = GetGLProgram();
+
+#ifdef RENDER_TO_SCREEN
+    while (!glfwWindowShouldClose(window))
+    {
+        GLDrawArrays(program, vaoss, shapes);
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+#else
+    auto optRbo = RenderToGLBuffer(program, vaoss, shapes);
     if (!optRbo)
     {
         CleanupGL(window);
         return 1;
     }
 
-    RunCLWithGLBuffer(window, *optRbo);
+    RunCLWithGLBuffer(window, *optRbo, shapes.size());
+#endif
 
     CleanupGL(window);
 
