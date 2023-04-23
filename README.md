@@ -1,2 +1,2 @@
 # HelloOpenCGL
-Render a triangle to OpenGL buffer and read the pixels in OpenCL.
+Render shapes to OpenGL buffer and read the pixels in OpenCL.
