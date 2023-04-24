@@ -22,6 +22,8 @@ constexpr auto ROW_NUM = 60;
 constexpr auto COL_NUM = 30;
 constexpr auto RENDER_WIDTH = GRID_SIZE * ROW_NUM;
 constexpr auto RENDER_HEIGHT = GRID_SIZE * COL_NUM;
+constexpr auto WINDOW_WIDTH = 1920;
+constexpr auto WINDOW_HEIGHT = 1080;
 
 constexpr char VERTEX_SHADER[] =
 "#version 400\n"
@@ -90,7 +92,7 @@ GLFWwindow* InitGL()
     glfwWindowHint(GLFW_VISIBLE, FALSE);
 #endif
 
-    GLFWwindow* window = glfwCreateWindow(1920, 1080, "Hello OpenCGL", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Hello OpenCGL", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
