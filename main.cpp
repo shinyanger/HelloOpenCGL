@@ -17,9 +17,10 @@
 
 // #define RENDER_TO_SCREEN
 
-constexpr auto GRID_SIZE = 32;
-constexpr auto ROW_NUM = 60;
-constexpr auto COL_NUM = 30;
+constexpr auto GRID_SIZE = 64;
+constexpr auto ROW_NUM = 30;
+constexpr auto COL_NUM = 20;
+constexpr auto LOCAL_ITEM_SIZE = 16;
 constexpr auto RENDER_WIDTH = GRID_SIZE * ROW_NUM;
 constexpr auto RENDER_HEIGHT = GRID_SIZE * COL_NUM;
 constexpr auto WINDOW_WIDTH = 1920;
@@ -45,6 +46,8 @@ using shape_t = std::vector<vertices_t>;
 static void ValidateConstants()
 {
     static_assert(GRID_SIZE % 4 == 0, "Alignment error");
+    static_assert(RENDER_WIDTH % LOCAL_ITEM_SIZE == 0, "Alignment error");
+    static_assert(RENDER_HEIGHT % LOCAL_ITEM_SIZE == 0, "Alignment error");
 }
 
 void ErrorCallback(int error, const char* description)
@@ -356,7 +359,7 @@ void RunCLWithGLBuffer(GLFWwindow* window, GLuint rbo, size_t count)
     ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*)&mem_obj_pixels);
 
     size_t global_item_size[] = {RENDER_WIDTH, RENDER_HEIGHT};
-    size_t local_item_size[] = {GRID_SIZE, GRID_SIZE};
+    size_t local_item_size[] = {LOCAL_ITEM_SIZE, LOCAL_ITEM_SIZE};
     ret = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_item_size, local_item_size, 0, NULL, NULL);
 
     ret = clEnqueueReleaseGLObjects(command_queue, 1, &mem_obj, 0, NULL, NULL);
